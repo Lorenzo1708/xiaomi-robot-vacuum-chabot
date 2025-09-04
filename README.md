@@ -1,6 +1,12 @@
 ```
 py -m venv .venv
+py -m pip install --upgrade pip
 py -m pip install -r ./requirements.txt
+```
+
+```
+py ./scripts/create_index.py
+py ./scripts/test_index.py
 ```
 
 ```
