@@ -1,8 +1,7 @@
 import os
 
 import gradio as gr
-from google.genai.types import GenerateContentConfig
-from llama_index.core import load_index_from_storage, StorageContext
+from llama_index.core import load_index_from_storage, PromptTemplate, StorageContext
 from llama_index.core.agent import ReActAgent
 from llama_index.core.agent.workflow import AgentStream, ToolCallResult
 from llama_index.core.llms import ChatMessage
@@ -17,19 +16,9 @@ PASSWORD = os.getenv("PASSWORD")
 if not (USERNAME and PASSWORD):
     raise Exception("Missing USERNAME and/or PASSWORD environment variable(s).")
 
-with open(
-    "./app/prompts/generate_content_config_system_instruction.md", encoding="utf-8"
-) as generate_content_config_system_instruction_file:
-    llm = GoogleGenAI(
-        "gemini-2.5-flash",
-        generation_config=GenerateContentConfig(
-            system_instruction=generate_content_config_system_instruction_file.read()
-        ),
-    )
+with open("./app/prompts/tool_metadata.md", encoding="utf-8") as tool_metadata_file:
+    llm = GoogleGenAI("gemini-2.5-flash")
 
-with open(
-    "./app/prompts/query_engine_tool_description.md", encoding="utf-8"
-) as query_engine_tool_description_file:
     agent = ReActAgent(
         tools=[
             QueryEngineTool(
@@ -37,10 +26,19 @@ with open(
                     StorageContext.from_defaults(persist_dir="./app/index"),
                     embed_model=GoogleGenAIEmbedding(),
                 ).as_query_engine(llm, similarity_top_k=4),
-                ToolMetadata(query_engine_tool_description_file.read(), "index"),
+                ToolMetadata(tool_metadata_file.read(), "index"),
             )
         ],
         llm=llm,
+    )
+
+with open("./app/prompts/prompt_template.md", encoding="utf-8") as prompt_template_file:
+    agent.update_prompts(
+        {
+            "react_header": PromptTemplate(
+                f"{prompt_template_file.read()}\n{agent.get_prompts()['react_header'].get_template()}"
+            )
+        }
     )
 
 
@@ -72,6 +70,11 @@ async def chat(message: str, history: list[dict[str, str | None]]) -> str:
         return "Error."
 
 
-chat_interface = gr.ChatInterface(chat, type="messages", save_history=True)
+chat_interface = gr.ChatInterface(
+    chat,
+    type="messages",
+    title="Aqui é o Alfred, faça suas perguntas!",
+    save_history=True,
+)
 chat_interface.saved_conversations.secret = "secret"
 chat_interface.launch(auth=(USERNAME, PASSWORD))
